@@ -1,74 +1,9 @@
-import { ZodError, ZodTypeAny, output } from "zod";
-import { Validator } from "../core/models/Validator";
-import { DuvetRequest } from "../core/models/DuvetRequest";
+import { Validator } from "../core/validation/Validator";
+import { zodRequestFieldValidator } from "./zodRequestFieldValidator";
+import { ZodValidatorMap } from "./ZodValidatorMap";
+import { GenericZodSchemaMap } from "./models/GenericZodSchemaMap";
+import { ZodCompatibleRequest } from "./models/ZodCompatibleRequest";
 
-type RequestFields = "body" | "params" | "query" | "headers" | "cookies";
-
-/**
- * Validates a specific field in a request using a Zod schema.
- * @template Field - The type of field to validate (e.g., "body", "params", "query").
- * @template ZodSchema - The Zod schema to use for validation.
- * @param field - The field to validate.
- * @param schema - The Zod schema to use for validation. If not provided, the field will be considered valid.
- * @returns The validation result.
- */
-function zodRequestFieldValidator<
-  Field extends RequestFields,
-  ZodSchema extends ZodTypeAny,
->(field: Field, schema: ZodSchema): Validator<Field, output<ZodSchema>> {
-  return {
-    validate: (request: DuvetRequest) => {
-      const result = schema.safeParse(request.underlying[field]);
-
-      if (result.success === false) {
-        const errorMessage = formatZodError(field, result.error);
-
-        console.log(errorMessage);
-        return {
-          isValid: false,
-          error: errorMessage,
-        };
-      }
-
-      return {
-        isValid: true,
-        field,
-        parsedData: result.data,
-      };
-    },
-  };
-}
-
-type RequestValidator = {
-  body?: ZodTypeAny;
-  params?: ZodTypeAny;
-  query?: ZodTypeAny;
-  headers?: ZodTypeAny;
-  cookies?: ZodTypeAny;
-};
-
-// Define the ZodValidatorTuple type with conditional types
-type ZodValidatorTuple<ZodRequestValidator extends RequestValidator> = [
-  ZodRequestValidator["body"] extends ZodTypeAny
-    ? Validator<"body", output<ZodRequestValidator["body"]>>
-    : never,
-  ZodRequestValidator["params"] extends ZodTypeAny
-    ? Validator<"params", output<ZodRequestValidator["params"]>>
-    : never,
-  ZodRequestValidator["query"] extends ZodTypeAny
-    ? Validator<"query", output<ZodRequestValidator["query"]>>
-    : never,
-  ZodRequestValidator["headers"] extends ZodTypeAny
-    ? Validator<"headers", output<ZodRequestValidator["headers"]>>
-    : never,
-  ZodRequestValidator["cookies"] extends ZodTypeAny
-    ? Validator<"cookies", output<ZodRequestValidator["cookies"]>>
-    : never,
-];
-
-// Define the ZodValidator type
-type ZodValidator<ZodRequestValidator extends RequestValidator> =
-  ZodValidatorTuple<ZodRequestValidator>;
 /**
  * Creates an array of validators for the request data using Zod schemas.
  * @param validator - The Zod schema to use to validate the request.
@@ -81,49 +16,34 @@ type ZodValidator<ZodRequestValidator extends RequestValidator> =
  * @param validator.cookies - Cookies schema
  * @returns A new duvet validator array
  */
-export function zodValidator<ZodRequestValidator extends RequestValidator>(
-  validator: ZodRequestValidator,
-): ZodValidator<ZodRequestValidator> {
-  const validators = [];
+export function zodValidator<ZodSchemaMap extends GenericZodSchemaMap>(
+  validator: ZodSchemaMap,
+): ZodValidatorMap<ZodSchemaMap> {
+  const validators: {
+    [key: string]: Validator<ZodCompatibleRequest, unknown>;
+  } = {};
 
   if (validator.body) {
-    validators.push(zodRequestFieldValidator("body", validator.body));
+    validators["body"] = zodRequestFieldValidator("body", validator.body);
   }
   if (validator.params) {
-    validators.push(zodRequestFieldValidator("params", validator.params));
+    validators["params"] = zodRequestFieldValidator("params", validator.params);
   }
   if (validator.query) {
-    validators.push(zodRequestFieldValidator("query", validator.query));
+    validators["query"] = zodRequestFieldValidator("query", validator.query);
   }
   if (validator.headers) {
-    validators.push(zodRequestFieldValidator("headers", validator.headers));
+    validators["headers"] = zodRequestFieldValidator(
+      "headers",
+      validator.headers,
+    );
   }
   if (validator.cookies) {
-    validators.push(zodRequestFieldValidator("cookies", validator.cookies));
+    validators["cookies"] = zodRequestFieldValidator(
+      "cookies",
+      validator.cookies,
+    );
   }
 
-  return validators as ZodValidator<ZodRequestValidator>;
-}
-
-/**
- * Takes a Zod error and formats it into a string.
- * @param error The zod error to format.
- * @returns A human readable string representation of the error.
- */
-function formatZodError(field_name: string, error: ZodError): string {
-  let errorString: string = `${field_name} validation failed: `;
-
-  for (const issue of error.issues) {
-    if (errorString.length > 0) {
-      errorString += "\n";
-    }
-
-    if (issue.path.length > 0) {
-      errorString += issue.path.join(".") + ": ";
-    }
-
-    errorString += issue.message;
-  }
-
-  return errorString;
+  return validators as ZodValidatorMap<ZodSchemaMap>;
 }

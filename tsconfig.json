@@ -4,6 +4,7 @@
     "declarationDir": "dist/types",
 
     "rootDirs": ["src"],
+    "baseUrl": "src",
 
     "moduleResolution": "node",
     "esModuleInterop": true,

@@ -1,62 +1,51 @@
-import { DuvetRequest } from "../models/DuvetRequest";
 import { mergeDefaultWithMissingItems } from "../../utils/mergeDefaultWithMissingItems";
 import { extendObject } from "../../utils/extendObject";
-import { DuvetExport } from "../models/DuvetExport";
-import { MaybeFunction, Middleware } from "../models/Middleware";
+import { DuvetExport } from "../common/DuvetExport";
+import { Middleware } from "../common/Middleware";
 import { getFromFnOrValue } from "../../utils/getFromFnOrValue";
-import { DuvetEndpoint } from "../models/DuvetEndpoint";
-import { HandlerBuilder } from "../models/HandlerBuilder";
-import { ConfigurableHandler } from "../models/ConfigurableHandler";
-import { Extend } from "../../utils/types/Extend";
+import { DuvetEndpoint } from "./DuvetEndpoint";
 import { NotKeyOf } from "../../utils/types/NotKeyOf";
-import { DefineEndpointFunctionArgs } from "../models/DefineEndpointFunction";
-import { ValidatorArray } from "../models/Validator";
+import { DefineEndpointFunctionArgs } from "../common/DefineEndpointFunction";
 import { extractParts } from "./extractParts";
 import { wrapHandlerWithValidationLayer } from "./handlerWithValidators";
+import { HandlerBuilder } from "./handler-builder/HandlerBuilder";
+import { MiddlewareHandlerBuilder } from "./handler-builder/MiddlewareHandlerBuilder";
+import { BaseHandlerBuilder } from "./handler-builder/BaseHandlerBuilder";
+import { EmptyObject } from "../common/EmptyObject";
+import { BaseContext } from "../common/BaseContext";
+import { GenericValidatorMapArray } from "../validation/GenericValidatorMapArray";
+import { mergeValidators } from "./mergeValidators";
 
-export type StringKeysOnly<T> = {
-  [K in keyof T]: K extends string ? K : never;
-};
-
-//TODO: Add more information and examples on how to use the class
 /**
  * The main class that is used to define endpoints and build a router
  */
 export class DuvetEndpointBuilder<
-  Context extends { global: GlobalContext },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Config extends Record<string, any>,
+  RequestType,
+  ResponseType,
+  Context extends PreviousContext,
+  Config extends object,
   DefaultConfig,
   GlobalContext,
+  PreviousContext extends BaseContext<GlobalContext>,
 > {
   /**
    * Creates a new DuvetEndpointBuilder object. This is the starting point for defining endpoints.
    * @returns A new DuvetEndpointBuilder instance with a global context object.
    */
-  public static new<GlobalContext>() {
+  public static new<GlobalContext, RequestType, ResponseType>() {
     type Context = {
       global: GlobalContext;
     };
 
-    type Config = {};
-
-    const handlerBuilder: HandlerBuilder<GlobalContext, Context, Config> = {
-      buildConfigurableHandler: <
-        NewContext extends Context,
-        NewConfig extends Config,
-      >(
-        innerHandler: ConfigurableHandler<NewContext, NewConfig>,
-      ) =>
-        innerHandler as ConfigurableHandler<
-          { global: GlobalContext },
-          NewConfig
-        >,
-    };
-
-    return new DuvetEndpointBuilder<Context, Config, {}, GlobalContext>(
-      {},
-      handlerBuilder,
-    );
+    return new DuvetEndpointBuilder<
+      RequestType,
+      ResponseType,
+      Context,
+      EmptyObject,
+      EmptyObject,
+      GlobalContext,
+      BaseContext<GlobalContext>
+    >({}, new BaseHandlerBuilder());
   }
 
   private defaultConfig: DefaultConfig;
@@ -64,11 +53,23 @@ export class DuvetEndpointBuilder<
   /**
    * Builds a new handler with all the previous middleware applied to it.
    */
-  private handlerBuilder: HandlerBuilder<GlobalContext, Context, Config>;
+  private handlerBuilder: HandlerBuilder<
+    RequestType,
+    ResponseType,
+    BaseContext<GlobalContext>,
+    PreviousContext,
+    Config
+  >;
 
   private constructor(
     defaultConfig: DefaultConfig,
-    handlerBuilder: HandlerBuilder<GlobalContext, Context, Config>,
+    handlerBuilder: HandlerBuilder<
+      RequestType,
+      ResponseType,
+      BaseContext<GlobalContext>,
+      PreviousContext,
+      Config
+    >,
   ) {
     this.defaultConfig = defaultConfig;
     this.handlerBuilder = handlerBuilder;
@@ -83,10 +84,13 @@ export class DuvetEndpointBuilder<
     extension: DefaultConfigExtension,
   ) {
     return new DuvetEndpointBuilder<
+      RequestType,
+      ResponseType,
       Context,
       Config,
       DefaultConfig & DefaultConfigExtension,
-      GlobalContext
+      GlobalContext,
+      PreviousContext
     >(extendObject(this.defaultConfig, extension), this.handlerBuilder);
   }
 
@@ -97,64 +101,34 @@ export class DuvetEndpointBuilder<
    */
   addMiddleware<Name extends string, ContextExt, ConfigExt>(
     middleware: Middleware<
+      RequestType,
+      ResponseType,
       NotKeyOf<Name, Config>,
       ConfigExt,
       ContextExt,
       GlobalContext
     >,
   ) {
-    // TODO: Clean this function to be more readable
-    // Create a new handler builder which wraps the
-
-    const newHandlerBuilder: HandlerBuilder<
+    const newHandlerBuilder = new MiddlewareHandlerBuilder<
+      RequestType,
+      ResponseType,
+      NotKeyOf<Name, Config>,
       GlobalContext,
-      Extend<Context, ContextExt, Name>,
-      Extend<Config, ConfigExt, Name>
-    > = {
-      /**
-       * @param innermostHandler The handler that this middleware will wrap.
-       * @returns A new handler which passes the inner handler into it.
-       */
-      buildConfigurableHandler: <
-        NewContext extends Extend<Context, ContextExt, Name>,
-        NewConfig extends Extend<Config, ConfigExt, Name>,
-      >(
-        innermostHandler: ConfigurableHandler<NewContext, NewConfig>,
-      ) => {
-        // Builds a handler using the previous handler builder to wrap the innermost handler.
-        const wrappedInnerHandler =
-          this.handlerBuilder.buildConfigurableHandler<NewContext, NewConfig>(
-            innermostHandler,
-          );
-
-        // Returns a new handler that wraps the handler generated by the previous handler builder.
-        return (
-          request: DuvetRequest,
-          context: { global: GlobalContext },
-          config: NewConfig,
-        ) =>
-          middleware.handler(
-            request,
-            // Next function simply extends the context object with the extension object and calls the inner handler.
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            ((extension?: ContextExt) => {
-              if (extension)
-                (context as Record<Name, ContextExt>)[middleware.name] =
-                  extension;
-              return wrappedInnerHandler(request, context, config);
-            }) as MaybeFunction<ContextExt>,
-            config[middleware.name],
-            context.global,
-          );
-      },
-    };
+      Context,
+      ContextExt,
+      Config,
+      ConfigExt
+    >(this.handlerBuilder, middleware);
 
     // Creates a new DuvetEndpointBuilder object with the new handler builder.
     return new DuvetEndpointBuilder<
-      Extend<Context, ContextExt, Name>,
-      Extend<Config, ConfigExt, Name>,
+      RequestType,
+      ResponseType,
+      Context & Record<Name, ContextExt>,
+      Config & Record<Name, ConfigExt>,
       DefaultConfig,
-      GlobalContext
+      GlobalContext,
+      Context
     >(this.defaultConfig, newHandlerBuilder);
   }
 
@@ -169,23 +143,38 @@ export class DuvetEndpointBuilder<
     const resolvedNewConfig = getFromFnOrValue(newConfig, this.defaultConfig);
 
     return new DuvetEndpointBuilder<
+      RequestType,
+      ResponseType,
       Context,
       Config,
       NewDefaultConfig,
-      GlobalContext
+      GlobalContext,
+      PreviousContext
     >(resolvedNewConfig, this.handlerBuilder);
   }
 
-  defineEndpoint<Validators extends ValidatorArray>(
+  defineEndpoint<Validators extends GenericValidatorMapArray<RequestType>>(
     ...args: DefineEndpointFunctionArgs<
+      RequestType,
+      ResponseType,
       Context,
       GlobalContext,
       Config,
       DefaultConfig,
       Validators
     >
-  ): DuvetExport<DuvetEndpoint<GlobalContext, Config>> {
-    const { config, validators, handler } = extractParts(...args);
+  ): DuvetExport<
+    DuvetEndpoint<RequestType, ResponseType, GlobalContext, Config>
+  > {
+    const { config, validators, handler } = extractParts<
+      RequestType,
+      ResponseType,
+      Context,
+      GlobalContext,
+      Config,
+      DefaultConfig,
+      Validators
+    >(...args);
 
     // Merges the config from the user with the default config.
     const mergedConfig = mergeDefaultWithMissingItems<Config, DefaultConfig>(
@@ -193,10 +182,12 @@ export class DuvetEndpointBuilder<
       config,
     );
 
-    const flattenedValidators = validators.flatMap((validator) => validator);
+    const mergedValidators = mergeValidators<RequestType, Validators>(
+      validators,
+    );
 
-    const handlerWithMiddleware = this.handlerBuilder.buildConfigurableHandler(
-      wrapHandlerWithValidationLayer(handler, flattenedValidators),
+    const handlerWithMiddleware = this.handlerBuilder.buildWrappedHandler(
+      wrapHandlerWithValidationLayer(handler, mergedValidators),
     );
 
     return {

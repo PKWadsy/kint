@@ -8,4 +8,7 @@ export default [
   "todo",
   "fs",
   "readdir",
+  "nullable",
+  "non",
+  "txt",
 ];

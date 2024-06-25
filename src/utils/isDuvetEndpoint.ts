@@ -1,11 +1,14 @@
-import { DuvetExport } from "../core/models/DuvetExport";
+import { DuvetEndpoint } from "../core/endpoint-builder/DuvetEndpoint";
+import { isObjectWithField } from "./isObjectWithField";
 
 /**
- * Tests if a value is a DuvetExport.
+ * Tests if a value is a DuvetEndpoint object
  * @param test The value to test
- * @returns A boolean indicating if the value is a DuvetExport.
+ * @returns A boolean indicating if the value is a DuvetEndpoint object
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function isDuvetExport(test: any): test is DuvetExport<unknown> {
-  return test?.builtByDuvet === true;
+export function isDuvetEndpoint(
+  test: unknown,
+): test is DuvetEndpoint<unknown, unknown, unknown, unknown> {
+  if (!isObjectWithField(test, "exportType")) return false;
+  return test.exportType === "DuvetEndpoint";
 }

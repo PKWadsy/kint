@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "baseUrl": "../",
+
+    "paths": {
+      "src/*": ["src/*"],
+      "test-helpers/*": ["test/test-helpers/*"]
+    },
+
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["**/*.ts"]
+}

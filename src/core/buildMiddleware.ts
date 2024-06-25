@@ -1,4 +1,4 @@
-import { Middleware } from "./models/Middleware";
+import { Middleware, MiddlewareHandler } from "./common/Middleware";
 
 // TODO: Add more information about the parameters and add a reference to the middleware object.
 /**
@@ -8,14 +8,22 @@ import { Middleware } from "./models/Middleware";
  * @returns A middleware object.
  */
 export function buildMiddleware<
+  RequestType,
+  ResponseType,
   Name extends string,
   Config = void,
   Context = void,
   GlobalContext = void,
 >(
   name: Name,
-  handler: Middleware<Name, Config, Context, GlobalContext>["handler"],
-): Middleware<Name, Config, Context, GlobalContext> {
+  handler: MiddlewareHandler<
+    RequestType,
+    ResponseType,
+    Config,
+    Context,
+    GlobalContext
+  >,
+): Middleware<RequestType, ResponseType, Name, Config, Context, GlobalContext> {
   return {
     name,
     handler,

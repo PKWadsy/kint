@@ -1,15 +1,15 @@
 {
-  "name": "express-duvet",
+  "name": "duvetjs",
   "type": "module",
   "version": "0.6.1",
   "description": "An extensible and opinionated tool for building nodejs backend apps faster",
-  "main": "dist/cjs/index.js",
-  "module": "dist/esm/index.js",
-  "types": "dist/types/index.d.ts",
+  "main": "dist/cjs",
+  "module": "dist/esm",
+  "types": "dist/types",
   "exports": {
     ".": {
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
+      "import": "./dist/esm",
+      "require": "./dist/cjs"
     }
   },
   "author": "Pillo",
@@ -25,6 +25,7 @@
     "build:cjs": "tsc --project tsconfig.cjs.json",
     "lint": "eslint .",
     "test": "jest --coverage",
+    "test:unit": "jest --coverage --testPathIgnorePatterns=/e2e/",
     "format": "prettier --write ."
   },
   "devDependencies": {

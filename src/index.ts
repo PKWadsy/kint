@@ -1,9 +1,6 @@
 export { DuvetEndpointBuilder } from "./core/endpoint-builder/DuvetEndpointBuilder";
-export { createExpressDuvet } from "./core/createDuvet";
+export { createExpressDuvet } from "./express/createExpressDuvet";
 
-export { Middleware } from "./core/models/Middleware";
-
-export { DuvetRequest } from "./core/models/DuvetRequest";
-export { DuvetResponse } from "./core/models/DuvetResponse";
+export { Middleware } from "./core/common/Middleware";
 
 export { buildMiddleware } from "./core/buildMiddleware";
